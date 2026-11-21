@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Muzika ime</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:#111; color:#eee; }
+  .wrap { max-width:720px; margin:0 auto; padding:14px; }
+  h2 { font-size:16px; color:#ddd; margin:18px 0 8px; display:flex; align-items:center; justify-content:space-between; }
+  .row { display:flex; gap:8px; margin-bottom:8px; align-items:center; }
+  input, select { flex:1; min-width:0; padding:12px; border-radius:8px; border:1px solid #333; background:#1c1c1c; color:#eee; font-size:16px; }
+  button { padding:12px 14px; border:0; border-radius:8px; background:#e53935; color:#fff; font-size:15px; cursor:pointer; }
+  button.sec { background:#2a2a2a; }
+  button.big { width:100%; padding:16px; font-size:18px; margin:6px 0 4px; }
+  .player { position:relative; padding-top:56.25%; margin:12px 0; background:#000; border-radius:10px; overflow:hidden; }
+  .player.audio { padding-top:0; height:80px; }
+  .player #yt, .player iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+  .controls { display:flex; gap:8px; flex-wrap:wrap; }
+  .controls button { flex:1; font-size:18px; }
+  #now { font-size:14px; color:#aaa; margin-top:8px; min-height:18px; }
+  ul { list-style:none; padding:0; margin:0; }
+  li { display:flex; align-items:center; gap:10px; padding:8px; border-radius:8px; background:#1a1a1a; margin-bottom:6px; cursor:pointer; }
+  li.active { background:#3a1414; }
+  li img { width:96px; height:54px; object-fit:cover; border-radius:6px; flex-shrink:0; }
+  li span { flex:1; font-size:14px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  li button { padding:8px 10px; font-size:13px; flex-shrink:0; }
+  .hint { color:#888; font-size:13px; }
+  .hidden { display:none !important; }
+  .box { background:#1a1a1a; padding:12px; border-radius:10px; margin-bottom:12px; }
+  .chk { display:flex; align-items:center; gap:6px; font-size:14px; white-space:nowrap; }
+  .chk input { width:20px; height:20px; flex:none; }
+  #banner { position:relative; height:190px; border-radius:14px; overflow:hidden; margin-bottom:12px; background:linear-gradient(135deg,#3a1414,#1a1a1a); cursor:pointer; }
+  #bannerImg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:none; }
+  #banner::after { content:''; position:absolute; inset:0; background:linear-gradient(transparent 50%, rgba(0,0,0,.7)); pointer-events:none; }
+  #banner h1 { position:absolute; left:14px; bottom:10px; margin:0; font-size:24px; text-shadow:0 2px 8px #000; z-index:1; }
+  #bannerHint { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#bbb; font-size:15px; }
+  .tabs { display:flex; gap:6px; margin:14px 0 8px; }
+  .tabs button { flex:1; background:#222; font-size:14px; padding:10px 6px; }
+  .tabs button.on { background:#e53935; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="banner" onclick="document.getElementById('photoInput').click()">
+    <img id="bannerImg" alt="">
+    <div id="bannerHint">📷 Kliko këtu për të vendosur foton</div>
+    <h1>🎵 Muzika ime</h1>
+  </div>
+  <input type="file" id="photoInput" accept="image/*" class="hidden" onchange="setPhoto(this.files[0])">
+
+  <div id="keyBox" class="box hidden">
+    <p class="hint">Çelësi i YouTube (API Key) – ngjite një herë, ruhet në këtë celular.</p>
+    <div class="row">
+      <input id="keyInput" placeholder="API Key…">
+      <button onclick="saveKey()">Ruaj</button>
+    </div>
+    <p class="hint">Kërkimi automatik kur hap faqen:</p>
+    <div class="row">
+      <input id="autoQ" placeholder="p.sh. këngë shqip">
+      <button onclick="saveAutoQ()">Ruaj</button>
+    </div>
+  </div>
+
+  <button class="big" id="playHits" onclick="playHits()">▶ Luaj hitet e reja</button>
+
+  <div id="box" class="player"><div id="yt"></div></div>
+  <div class="controls">
+    <button class="sec" onclick="prev()">⏮</button>
+    <button class="sec" onclick="togglePlay()">⏯</button>
+    <button class="sec" onclick="next()">⏭</button>
+    <button class="sec" onclick="toggleAudio()">🎧</button>
+    <button class="sec" onclick="toggleSettings()">⚙️</button>
+  </div>
+  <div id="now"></div>
+
+  <div class="tabs">
+    <button id="tabHits" class="on" onclick="showTab('hits')">🔥 Hitet e reja</button>
+    <button id="tabSearch" onclick="showTab('search')">🔍 Kërko</button>
+    <button id="tabMine" onclick="showTab('mine')">⭐ Lista ime</button>
+  </div>
+
+  <div id="paneHits">
+    <div class="row">
+      <select id="hitsSort" onchange="loadHits(true)">
+        <option value="month">Hitet e këtij muaji</option>
+        <option value="week">Këtë javë</option>
+        <option value="year">Këtë vit</option>
+      </select>
+      <button class="sec" onclick="loadHits(true)">↻</button>
+    </div>
+    <ul id="hitsList"></ul>
+  </div>
+
+  <div id="paneSearch" class="hidden">
+    <div class="row">
+      <input id="q" placeholder="Kërko këngë ose këngëtar…" onkeydown="if(event.key==='Enter')doSearch()">
+      <button onclick="doSearch()">🔍</button>
+    </div>
+    <div class="row">
+      <select id="sort" onchange="doSearch()">
+        <option value="month">🔥 Këtë muaj</option>
+        <option value="week">🆕 Këtë javë</option>
+        <option value="year">📅 Këtë vit</option>
+        <option value="date">⏱ Më të rejat</option>
+        <option value="all">🔎 Të gjitha</option>
+      </select>
+      <label class="chk"><input type="checkbox" id="noMix" checked onchange="doSearch()"> Pa mikse</label>
+    </div>
+    <ul id="results"></ul>
+  </div>
+
+  <div id="paneMine" class="hidden">
+    <ul id="mineList"></ul>
+    <p class="hint">Këngët i shton me ➕ te Hitet ose te Kërko.</p>
+  </div>
+
+</div>
+
+<script>
+const store = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+};
+let apiKey = store.get('ytKey', '');
+let autoQ = store.get('autoQ', 'këngë shqip');
+let mine = store.get('mySongs', []);
+let hits = [];
+let results = [];
+let queue = [], qName = '', current = -1, player = null, pending = null;
+
+const mixRe = /\bmix|hitet e reja|kolazh|playlist|non.?stop|potpuri|muzik(a)? shqip 20\d\d|top \d+|\d+\s*(min|or[eë]|hour)/i;
+function esc(s){ const d = document.createElement('div'); d.innerHTML = s; return d.textContent; }
+
+/* ---------- Fotoja ---------- */
+function showPhoto(src){
+  if (!src) return;
+  const img = document.getElementById('bannerImg');
+  img.src = src; img.style.display = 'block';
+  document.getElementById('bannerHint').style.display = 'none';
+}
+function setPhoto(file){
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const im = new Image();
+    im.onload = () => {
+      const s = Math.min(1, 1000 / Math.max(im.width, im.height));
+      const c = document.createElement('canvas');
+      c.width = im.width * s; c.height = im.height * s;
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      const data = c.toDataURL('image/jpeg', 0.8);
+      store.set('myPhoto', data); showPhoto(data); setCarInfo();
+    };
+    im.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+showPhoto(store.get('myPhoto', ''));
+
+/* ---------- Cilësimet ---------- */
+function toggleSettings(){
+  const b = document.getElementById('keyBox');
+  b.classList.toggle('hidden');
+  document.getElementById('keyInput').value = apiKey;
+  document.getElementById('autoQ').value = autoQ;
+}
+function saveKey(){
+  apiKey = document.getElementById('keyInput').value.trim();
+  store.set('ytKey', apiKey);
+  document.getElementById('keyBox').classList.add('hidden');
+  loadHits(true);
+}
+function saveAutoQ(){
+  autoQ = document.getElementById('autoQ').value.trim() || 'këngë shqip';
+  store.set('autoQ', autoQ);
+  document.getElementById('keyBox').classList.add('hidden');
+  loadHits(true);
+}
+
+/* ---------- Kërkimi në YouTube ---------- */
+async function ytSearch(q, sort, noMix){
+  const days = { week: 7, month: 30, year: 365 }[sort];
+  let url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50'
+    + '&videoCategoryId=10&relevanceLanguage=sq&videoEmbeddable=true'
+    + '&q=' + encodeURIComponent(q) + '&key=' + encodeURIComponent(apiKey);
+  if (days) url += '&order=viewCount&publishedAfter=' + new Date(Date.now() - days * 864e5).toISOString();
+  else if (sort === 'date') url += '&order=date';
+  const r = await fetch(url);
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message);
+  let items = d.items.map(it => ({ id: it.id.videoId, title: esc(it.snippet.title), thumb: it.snippet.thumbnails.medium.url }));
+  if (noMix) items = items.filter(s => !mixRe.test(s.title));
+  return items;
+}
+
+/* ---------- Hitet e reja (automatike) ---------- */
+async function loadHits(force){
+  const ul = document.getElementById('hitsList');
+  if (!apiKey) { ul.innerHTML = '<li><span>Kliko ⚙️ dhe ngjit çelësin e YouTube.</span></li>'; toggleSettings(); return; }
+  const sort = document.getElementById('hitsSort').value;
+  const today = new Date().toDateString();
+  const cache = store.get('hitsCache', null);
+  if (!force && cache && cache.day === today && cache.q === autoQ && cache.sort === sort) {
+    hits = cache.items; renderList('hitsList', hits, 'hits'); return;
+  }
+  ul.innerHTML = '<li><span>Duke ngarkuar hitet e reja…</span></li>';
+  try {
+    hits = await ytSearch(autoQ, sort, true);
+    store.set('hitsCache', { day: today, q: autoQ, sort, items: hits });
+    renderList('hitsList', hits, 'hits');
+  } catch(err) {
+    ul.innerHTML = ''; addMsg(ul, 'Gabim: ' + err.message);
+  }
+}
+function playHits(){
+  if (!hits.length) { loadHits(true); return; }
+  playFrom(hits, 'hits', 0);
+}
+
+/* ---------- Kërko ---------- */
+async function doSearch(){
+  const q = document.getElementById('q').value.trim();
+  const ul = document.getElementById('results');
+  if (!q) return;
+  if (!apiKey) { toggleSettings(); return; }
+  ul.innerHTML = '<li><span>Duke kërkuar…</span></li>';
+  try {
+    results = await ytSearch(q, document.getElementById('sort').value, document.getElementById('noMix').checked);
+    renderList('results', results, 'results');
+    if (!results.length) addMsg(ul, 'Asnjë rezultat. Provo "Të gjitha" ose hiqe "Pa mikse".');
+  } catch(err) { ul.innerHTML = ''; addMsg(ul, 'Gabim: ' + err.message); }
+}
+
+/* ---------- Listat ---------- */
+function addMsg(ul, text){ const li = document.createElement('li'); li.innerHTML = '<span></span>'; li.querySelector('span').textContent = text; ul.appendChild(li); }
+
+function renderList(elId, list, name){
+  const ul = document.getElementById(elId);
+  ul.innerHTML = '';
+  list.forEach((s, i) => {
+    const li = document.createElement('li');
+    if (qName === name && i === current) li.className = 'active';
+    const isMine = name === 'mine';
+    li.innerHTML = '<img><span></span><button class="' + (isMine ? 'sec' : '') + '">' + (isMine ? '✕' : '➕') + '</button>';
+    li.querySelector('img').src = s.thumb || ('https://i.ytimg.com/vi/' + s.id + '/mqdefault.jpg');
+    li.querySelector('span').textContent = s.title;
+    li.onclick = () => playFrom(list, name, i);
+    li.querySelector('button').onclick = e => {
+      e.stopPropagation();
+      if (isMine) {
+        mine.splice(i, 1); store.set('mySongs', mine);
+        if (qName === 'mine') { if (i < current) current--; else if (i === current) current = -1; }
+        renderList('mineList', mine, 'mine');
+      } else {
+        mine.push(s); store.set('mySongs', mine); renderList('mineList', mine, 'mine');
+        e.target.textContent = '✓';
+      }
+    };
+    ul.appendChild(li);
+  });
+}
+function renderAll(){
+  renderList('hitsList', hits, 'hits');
+  renderList('results', results, 'results');
+  renderList('mineList', mine, 'mine');
+}
+
+function showTab(t){
+  ['hits','search','mine'].forEach(x => {
+    document.getElementById('pane' + x.charAt(0).toUpperCase() + x.slice(1)).classList.toggle('hidden', x !== t);
+  });
+  document.getElementById('tabHits').classList.toggle('on', t === 'hits');
+  document.getElementById('tabSearch').classList.toggle('on', t === 'search');
+  document.getElementById('tabMine').classList.toggle('on', t === 'mine');
+}
+
+/* ---------- Player ---------- */
+function playFrom(list, name, i){
+  queue = list; qName = name;
+  play(i);
+}
+function play(i){
+  if (!queue[i]) return;
+  current = i; renderAll();
+  document.getElementById('now').textContent = '▶ ' + queue[i].title;
+  if (player && player.loadVideoById) player.loadVideoById(queue[i].id);
+  else if (window.YT && YT.Player) createPlayer(queue[i].id);
+  else pending = queue[i].id;
+  setCarInfo();
+}
+function next(){ if (queue.length) play((current + 1) % queue.length); }
+function prev(){ if (queue.length) play((current - 1 + queue.length) % queue.length); }
+function togglePlay(){
+  if (!player || !player.getPlayerState) { playHits(); return; }
+  player.getPlayerState() === YT.PlayerState.PLAYING ? player.pauseVideo() : player.playVideo();
+}
+function toggleAudio(){ document.getElementById('box').classList.toggle('audio'); }
+
+function createPlayer(id){
+  player = new YT.Player('yt', {
+    host: 'https://www.youtube.com',
+    videoId: id,
+    playerVars: { autoplay: 1, rel: 0, playsinline: 1 },
+    events: {
+      onStateChange: e => {
+        if (e.data === YT.PlayerState.ENDED) next();
+        if (e.data === YT.PlayerState.PLAYING) setCarInfo();
+      },
+      onError: () => setTimeout(next, 1000)   // video e bllokuar → kalo te tjetra
+    }
+  });
+}
+
+/* Titulli + fotoja në ekranin e makinës / njoftime */
+function setCarInfo(){
+  if (!('mediaSession' in navigator) || !queue[current]) return;
+  try {
+    const photo = store.get('myPhoto', '');
+    const art = photo ? [{ src: photo, sizes: '512x512', type: 'image/jpeg' }]
+                      : [{ src: 'https://i.ytimg.com/vi/' + queue[current].id + '/hqdefault.jpg', sizes: '480x360', type: 'image/jpeg' }];
+    navigator.mediaSession.metadata = new MediaMetadata({ title: queue[current].title, artist: 'Muzika ime', artwork: art });
+    navigator.mediaSession.setActionHandler('nexttrack', next);
+    navigator.mediaSession.setActionHandler('previoustrack', prev);
+    navigator.mediaSession.setActionHandler('play', () => player && player.playVideo());
+    navigator.mediaSession.setActionHandler('pause', () => player && player.pauseVideo());
+  } catch(e) {}
+}
+
+window.onYouTubeIframeAPIReady = () => { if (pending) { createPlayer(pending); pending = null; } };
+const tag = document.createElement('script');
+tag.src = 'https://www.youtube.com/iframe_api';
+document.head.appendChild(tag);
+
+/* ---------- Kur hapet faqja ---------- */
+renderList('mineList', mine, 'mine');
+loadHits(false).then(() => {
+  // provo të fillojë vetë; nëse shfletuesi e ndalon, shtyp "▶ Luaj hitet e reja"
+  if (hits.length) playFrom(hits, 'hits', 0);
+});
+</script>
+</body>
+</html>
